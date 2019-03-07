@@ -1,5 +1,5 @@
 import React, {Component} from 'react';
-import MapView, {Marker, AnimatedRegion} from 'react-native-maps';
+import MapView, {Marker, AnimatedRegion,  Polyline} from 'react-native-maps';
 import {
   StyleSheet,
   View,
@@ -11,11 +11,33 @@ import {
 
 const screen = Dimensions.get('window');
 const ASPECT_RATIO = screen.width / screen.height;
-const LATITUDE_DELTA = 0.0922;
-const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO;
+//const LATITUDE_DELTA = 0.0922;
+//const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO;
 
+const LATITUDE_DELTA = 0.009;
+const LONGITUDE_DELTA = 0.009;
+const LATITUDE = 37.78825;
+const LONGITUDE = -122.4324;
 
 export default  class HomeScreen extends React.Component {
+
+  constructor(props) {
+    super(props);
+
+    this.state = {
+      latitude: LATITUDE,
+      longitude: LONGITUDE,
+      routeCoordinates: [],
+      distanceTravelled: 0,
+      prevLatLng: {},
+      coordinate: new AnimatedRegion({
+        latitude: LATITUDE,
+        longitude: LONGITUDE,
+        latitudeDelta: 0,
+        longitudeDelta: 0
+      })
+    };
+  }
 
   getMapRegion = () => ({
     latitude: this.state.latitude,
@@ -24,22 +46,54 @@ export default  class HomeScreen extends React.Component {
     longitudeDelta: LONGITUDE_DELTA
   });
 
-  createMarkers() {
-    const {members} = this.state;
-    const membersWithLocations = members.filter(m => !!m.location);
-    return membersWithLocations.map(member => {
-      const {id, location, authData} = member;
-      const {name, color} = authData;
-      return (
-        <Marker.Animated
-          key={id}
-          identifier={id}
-          coordinate={location}
-          pinColor={color}
-          title={name}
-        />
-      );
-    });
+
+  componentDidMount() {
+    const { coordinate } = this.state;
+
+
+    this.watchID = navigator.geolocation.watchPosition(
+      position => {
+        const { routeCoordinates, distanceTravelled } = this.state;
+        const { latitude, longitude } = position.coords;
+
+        const newCoordinate = {
+          latitude,
+          longitude
+        };
+        console.log({ newCoordinate });
+
+        if (Platform.OS === "android") {
+          if (this.marker) {
+            this.marker._component.animateMarkerToCoordinate(
+              newCoordinate,
+              500
+            );
+          }
+        } else {
+          coordinate.timing(newCoordinate).start();
+        }
+
+        this.setState({
+          latitude,
+          longitude,
+          routeCoordinates: routeCoordinates.concat([newCoordinate]),
+          distanceTravelled:
+            distanceTravelled + this.calcDistance(newCoordinate),
+          prevLatLng: newCoordinate
+        });
+      },
+      error => console.log(error),
+      {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 1000,
+        distanceFilter: 10
+      }
+    );
+  }  
+
+  componentWillUnmount() {
+    navigator.geolocation.clearWatch(this.watchID);
   }  
 
   render() {
@@ -48,26 +102,30 @@ export default  class HomeScreen extends React.Component {
         <MapView
           style={styles.map}
           ref={ref => {this.map = ref;}}
-          initialRegion={{
-            latitude: 37.600425,
-            longitude: -122.385861,
-            latitudeDelta: LATITUDE_DELTA,
-            longitudeDelta: LONGITUDE_DELTA,
-          }}
+          showUserLocation
+          followUserLocation
+          loadingEnabled
+          region={this.getMapRegion()}
         >
 
-        </MapView>
-        <View pointerEvents="none" style={styles.members}>
+          <Polyline coordinates={this.state.routeCoordinates} strokeWidth={5} />
+            <Marker.Animated
+              ref={marker => {
+                this.marker = marker;
+              }}
+              coordinate={this.state.coordinate}
+          />        
 
-        </View>
+        </MapView>
+
         <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            onPress={() => this.fitToMarkersToMap()}
-            style={[styles.bubble, styles.button]}
-          >
-            <Text>Fit Markers Onto Map</Text>
+          <TouchableOpacity style={[styles.bubble, styles.button]}>
+            <Text style={styles.bottomBarContent}>
+              {parseFloat(this.state.distanceTravelled).toFixed(2)} km
+            </Text>
           </TouchableOpacity>
         </View>
+
       </View>
     );
   }
