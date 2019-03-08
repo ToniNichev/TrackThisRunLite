@@ -7,7 +7,10 @@ import {
   Dimensions,
   TouchableOpacity,
   AlertIOS,
+  Platform
 } from 'react-native';
+
+import haversine from "haversine";
 
 const screen = Dimensions.get('window');
 const ASPECT_RATIO = screen.width / screen.height;
@@ -45,6 +48,11 @@ export default  class HomeScreen extends React.Component {
     latitudeDelta: LATITUDE_DELTA,
     longitudeDelta: LONGITUDE_DELTA
   });
+
+  calcDistance = newLatLng => {
+    const { prevLatLng } = this.state;
+    return haversine(prevLatLng, newLatLng) || 0;
+  };  
 
 
   componentDidMount() {
